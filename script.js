@@ -1,4 +1,4 @@
-let data = {
+const data = {
   currentUser: {
     image: {
       png: "https://picsum.photos/id/237/30/30",
@@ -74,105 +74,116 @@ let data = {
   ],
 };
 
-const commentsContainer = document.querySelector(".comments");
-
-function saveDataToLocalStorage() {
-  localStorage.setItem("commentsData", JSON.stringify(data));
-}
-
-function getDataFromLocalStorage() {
-  const savedData = localStorage.getItem("commentsData");
-  if (savedData) {
-    data = JSON.parse(savedData);
+function localStorageExists() {
+  //eğer localde comment değişkenini buluyorsan yeni yazdıgımı burada güncelle eger bulamazsan comments datadaki commentsdir zaten hali hazırda var güvence aslında burası.
+  let comments;
+  const cachedComments = localStorage.getItem("comments");
+  if (cachedComments) {
+    comments = JSON.parse(cachedComments);
+  } else {
+    comments = data.comments;
+    localStorage.setItem("comments", JSON.stringify(comments));
   }
+
+  return comments;
 }
+
+function saveTheLocalStorage(object) {
+  let comments = localStorageExists();
+  comments.push(object);
+  localStorage.setItem("comments", JSON.stringify(comments));
+}
+
+const commentsContainer = document.querySelector(".comments");
 
 function createCommentItem(comment) {
   const { id, content, createdAt, score, user } = comment;
   return `
-    
-    <div class="comment">
-        <div class="comment-rating">
-            <a href="#" class="comment-rating-up" data-commentid="${id}">
-                +
-            </a>
-            <strong>${score}</strong>
-            <a href="#" class="comment-rating-down" data-commentid="${id}">
-                -
-            </a>
-            
-        </div>
-        <div class="comment-body">
-            <div class="comment-header">
-                <div class="profile-info">
-                    <img src="https://picsum.photos/id/${user.id}/40/40" alt="">
-                    <strong>${user.username}</strong>
-                    <span>${createdAt}</span>
-                </div>
-                ${
-                  comment.user.id === data.currentUser.id
-                    ? `<div><a class="delete-btn" href="#" data-commentid="${id}">
-                            Sil
-                        </a>
-                        <a class="edit-btn" href="#" data-commentid="${id}">
-                            Düzenle
-                        </a></div>`
-                    : `<a class="reply-btn" href="#" data-commentid="${id}">
-                        Cevap Yaz
-                    </a>`
-                }
-            </div>
-            <p contenteditable="false">${content}</p>
-        </div>
-    </div>
-    `;
+  
+  <div class="comment" data-commentid="${id}">
+      <div class="comment-rating">
+          <a href="#" class="comment-rating-up" data-commentid="${id}">
+              +
+          </a>
+          <strong>${score}</strong>
+          <a href="#" class="comment-rating-down" data-commentid="${id}">
+              -
+          </a>
+          
+      </div>
+      <div class="comment-body">
+          <div class="comment-header">
+              <div class="profile-info">
+                  <img src="https://picsum.photos/id/${user.id}/40/40" alt="">
+                  <strong>${user.username}</strong>
+                  <span>${createdAt}</span>
+              </div>
+              ${
+                comment.user.id === data.currentUser.id
+                  ? `<div><a class="delete-btn" href="#" data-commentid="${id}">
+                          Sil
+                      </a>
+                      <a class="edit-btn" href="#" data-commentid="${id}">
+                          Düzenle
+                      </a></div>`
+                  : `<a class="reply-btn" href="#" data-commentid="${id}">
+                      Cevap Yaz
+                  </a>`
+              }
+          </div>
+          <p contenteditable="false">${content}</p>
+          <div class="update-comment-div" style="display:none;">
+              <textarea></textarea>
+              <button data-commentid="${id}" class="update-comment">Güncelle</button>
+          </div>
+      </div>
+  </div>
+  `;
 }
 
 function createUniqueId() {
   let id = 1;
-  for (const comment of data.comments) {
-    if (comment.id === id) {
-      id += 1;
-    }
+  const commentIds = data.comments.map((comment) => comment.id);
+  while (commentIds.includes(id)) {
+    id++;
   }
   return id;
 }
-
+let toDeleteComment = null;
+const dialog = document.querySelector("dialog");
 function deleteComment(e) {
   e.preventDefault();
   const commentId = parseInt(this.dataset.commentid);
   const comment = searchCommentById(commentId);
+  toDeleteComment = comment;
+  dialog.showModal();
+  bindEvents();
+}
 
-  if (comment) {
-    const dialog = document.querySelector("dialog");
-    dialog.showModal();
-
-    const modalBtns = document.querySelectorAll(".dialog-btn");
-
-    for (const btn of modalBtns) {
-      btn.addEventListener("click", function () {
-        if (this.id == "delete") {
-          const index = data.comments.indexOf(comment);
-          if (index !== -1) {
-            data.comments.splice(index, 1);
-            renderComments();
-          }
-        }
-        dialog.close();
-      });
-    }
+function deleteCommentFunc(e) {
+  e.preventDefault();
+  const commentIndex = data.comments.indexOf(toDeleteComment);
+  if (e.target.id === "delete") {
+    data.comments.splice(commentIndex, 1);
+    localStorage.setItem("comments", JSON.stringify(data.comments)); // LocalStorage güncellendi
+    renderComments();
   }
+  dialog.close();
 }
 
 function editComment(e) {
   e.preventDefault();
   const commentId = parseInt(this.dataset.commentid);
-  const newComment = prompt("İçeriği neyle değiştirmek istersin?");
+  // const newComment = prompt("İçeriği neyle değiştirmek istersin?");
   const editedComment = data.comments.find(
     (comment) => comment.id === commentId
   );
-  editedComment.content = newComment;
-  renderComments();
+  const textareaDiv =
+    e.target.parentElement.parentElement.nextElementSibling.nextElementSibling;
+  textareaDiv.style.display = "block";
+
+  // editedComment.content = newComment;
+  // renderComments();
   // this.parentElement.parentElement.nextElementSibling.setAttribute("contenteditable", true);
 }
 
@@ -193,12 +204,26 @@ function handleNewCommentForm(e) {
   e.target.reset();
 }
 
+function updateComment(e) {
+  e.preventDefault();
+  const commentId = parseInt(e.target.dataset.commentid);
+  const editedComment = data.comments.find(
+    (comment) => comment.id === commentId
+  );
+  const newComment = e.target.previousElementSibling.value;
+  editedComment.content = newComment;
+  localStorage.setItem("comments", JSON.stringify(data.comments)); // LocalStorage güncellendi
+  renderComments();
+}
+
 function bindEvents() {
   const newCommentForm = document.querySelector(".new-comment form");
   const ratingUpBtns = document.querySelectorAll(".comment-rating-up");
   const ratingDownBtns = document.querySelectorAll(".comment-rating-down");
   const deleteBtns = document.querySelectorAll(".delete-btn");
   const editBtns = document.querySelectorAll(".edit-btn");
+  const dialogBtns = document.querySelectorAll(".dialog-btn");
+  const updateCommentBtns = document.querySelectorAll(".update-comment");
 
   for (const ratingUpBtn of ratingUpBtns) {
     ratingUpBtn.addEventListener("click", rateCommentUp);
@@ -214,6 +239,14 @@ function bindEvents() {
 
   for (const editBtn of editBtns) {
     editBtn.addEventListener("click", editComment);
+  }
+
+  for (const dialogBtn of dialogBtns) {
+    dialogBtn.addEventListener("click", deleteCommentFunc);
+  }
+
+  for (const updateCommentBtn of updateCommentBtns) {
+    updateCommentBtn.addEventListener("click", updateComment);
   }
 
   newCommentForm.addEventListener("submit", handleNewCommentForm);
@@ -249,17 +282,20 @@ function rateCommentDown(e) {
 }
 
 function renderComments() {
-  getDataFromLocalStorage();
   commentsContainer.innerHTML = "";
   for (const comment of data.comments) {
     commentsContainer.innerHTML += createCommentItem(comment);
   }
   bindEvents();
-  saveDataToLocalStorage();
 }
 
 function init() {
-  getDataFromLocalStorage();
+  const cachedComments = localStorage.getItem("comments");
+  if (cachedComments) {
+    data.comments = JSON.parse(cachedComments);
+  } else {
+    localStorage.setItem("comments", JSON.stringify(data.comments));
+  }
   renderComments();
 }
 
